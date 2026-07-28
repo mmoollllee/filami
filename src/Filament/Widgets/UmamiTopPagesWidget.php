@@ -3,7 +3,6 @@
 namespace Mmoollllee\Filami\Filament\Widgets;
 
 use Filament\Widgets\Widget;
-use Mmoollllee\Filami\Filami;
 use Mmoollllee\Filami\Filament\Widgets\Concerns\InteractsWithUmami;
 use Throwable;
 
@@ -38,7 +37,7 @@ class UmamiTopPagesWidget extends Widget
             'pages' => $pages,
             'max' => max(1, (int) collect($pages ?? [])->max('y')),
             'days' => $days,
-            'umamiUrl' => Filami::websiteDashboardUrl($websiteId),
+            'umamiUrl' => $this->umamiDashboardUrl($websiteId),
         ];
     }
 }

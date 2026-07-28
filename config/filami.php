@@ -37,8 +37,18 @@ return [
         // Matches TRACKER_SCRIPT_NAME on the Umami server when renamed.
         'script_name' => env('UMAMI_TRACKER_SCRIPT', 'script.js'),
 
-        // Environments in which <x-filami::tracking /> renders. '*' allows all.
-        'environments' => ['production'],
+        // Environments in which <x-filami::tracking /> renders — production
+        // only, so local clicks stay out of the real statistics. Comma
+        // separated; '*' allows every environment.
+        //
+        //     UMAMI_TRACKING_ENVIRONMENTS=local,production
+        //
+        // Beware when widening this: Umami records whatever hostname sends the
+        // event, so a .test domain lands in the same website as production.
+        'environments' => array_values(array_filter(array_map(
+            trim(...),
+            explode(',', (string) env('UMAMI_TRACKING_ENVIRONMENTS', 'production')),
+        ))),
     ],
 
     'widgets' => [

@@ -19,4 +19,11 @@ interface UmamiTrackable
 
     /** Primary domain of the tracked site; provisioning is skipped without one. */
     public function umamiWebsiteDomain(): ?string;
+
+    /**
+     * Base URL of the Umami instance this model reports to, or null to use the
+     * configured default. Lets a tenant point at its own server — with a
+     * website id that is enough to track, no env required.
+     */
+    public function umamiUrl(): ?string;
 }

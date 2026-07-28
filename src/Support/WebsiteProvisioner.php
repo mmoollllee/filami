@@ -5,7 +5,6 @@ namespace Mmoollllee\Filami\Support;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Mmoollllee\Filami\Filami;
-use Mmoollllee\Filami\UmamiClient;
 
 /**
  * Adopt-or-create, shared by the provisioning and sync jobs.
@@ -18,8 +17,6 @@ use Mmoollllee\Filami\UmamiClient;
  */
 class WebsiteProvisioner
 {
-    public function __construct(protected UmamiClient $client) {}
-
     /** Returns the linked website id, or null when the model has no domain. */
     public function provision(Model $model): ?string
     {
@@ -27,6 +24,8 @@ class WebsiteProvisioner
             return $websiteId;
         }
 
+        // Resolved per model: a tenant may report to its own Umami instance.
+        $client = Filami::client($model);
         $meta = Filami::websiteMeta($model);
 
         if (blank($meta['domain'])) {
@@ -38,8 +37,8 @@ class WebsiteProvisioner
             return null;
         }
 
-        $website = $this->client->findWebsiteByDomain($meta['domain'])
-            ?? $this->client->createWebsite($meta['name'], $meta['domain']);
+        $website = $client->findWebsiteByDomain($meta['domain'])
+            ?? $client->createWebsite($meta['name'], $meta['domain']);
 
         Filami::storeWebsiteId($model, $websiteId = (string) $website['id']);
 

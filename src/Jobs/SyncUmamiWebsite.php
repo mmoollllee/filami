@@ -4,7 +4,6 @@ namespace Mmoollllee\Filami\Jobs;
 
 use Mmoollllee\Filami\Filami;
 use Mmoollllee\Filami\Support\WebsiteProvisioner;
-use Mmoollllee\Filami\UmamiClient;
 
 /**
  * Pushes the current name/domain to the linked Umami website. Doubles as the
@@ -13,9 +12,9 @@ use Mmoollllee\Filami\UmamiClient;
  */
 class SyncUmamiWebsite extends UmamiModelJob
 {
-    public function handle(UmamiClient $client, WebsiteProvisioner $provisioner): void
+    public function handle(WebsiteProvisioner $provisioner): void
     {
-        if (! Filami::apiConfigured()) {
+        if (! Filami::apiConfigured($this->model)) {
             return;
         }
 
@@ -33,11 +32,12 @@ class SyncUmamiWebsite extends UmamiModelJob
             return;
         }
 
-        $updated = $client->updateWebsite($websiteId, ['name' => $meta['name'], 'domain' => $meta['domain']]);
+        $updated = Filami::client($this->model)
+            ->updateWebsite($websiteId, ['name' => $meta['name'], 'domain' => $meta['domain']]);
 
         // The website was deleted in the Umami UI, or the id belongs to another
-        // instance (e.g. left over from a previous Umami server): re-link
-        // instead of failing this job on every future edit forever.
+        // instance (e.g. the tenant was pointed at a different Umami server):
+        // re-link instead of failing this job on every future edit forever.
         if ($updated === null) {
             $provisioner->relink($this->model);
         }

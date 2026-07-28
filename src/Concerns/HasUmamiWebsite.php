@@ -44,4 +44,9 @@ trait HasUmamiWebsite
     {
         return Filami::conventionalDomain($this);
     }
+
+    public function umamiUrl(): ?string
+    {
+        return Filami::conventionalUrl($this);
+    }
 }

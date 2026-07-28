@@ -30,13 +30,13 @@ class Tracking extends Component
     public function shouldRender(): bool
     {
         return filled($this->websiteId)
-            ? Filami::enabled() && Filami::environmentAllowed()
+            ? Filami::enabled($this->for) && Filami::environmentAllowed()
             : Filami::tracks($this->for);
     }
 
     public function render(): View
     {
-        $url = (string) Filami::url();
+        $url = (string) Filami::url($this->for);
 
         return view('filami::components.tracking', [
             'websiteId' => $this->resolvedWebsiteId(),

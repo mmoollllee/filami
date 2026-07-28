@@ -10,7 +10,7 @@ class ProvisionUmamiWebsite extends UmamiModelJob
 {
     public function handle(WebsiteProvisioner $provisioner): void
     {
-        if (! Filami::apiConfigured()) {
+        if (! Filami::apiConfigured($this->model)) {
             return;
         }
 

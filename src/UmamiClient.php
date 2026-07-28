@@ -38,12 +38,17 @@ class UmamiClient
     /** Sentinel for a cached failure; no API response can collide with it. */
     private const UNREACHABLE = '__filami_unreachable__';
 
-    public static function fromConfig(array $config): self
+    /**
+     * @param  string|null  $apiUrl  Overrides the configured endpoint — used by
+     *                               {@see Filami::client()} for models that
+     *                               report to their own Umami instance.
+     */
+    public static function fromConfig(array $config, ?string $apiUrl = null): self
     {
         return new self(
             // Filami owns the url/api_url derivation so the dashboard links and
             // the API calls can never disagree about the base URL.
-            apiUrl: Filami::apiUrl(),
+            apiUrl: $apiUrl ?? Filami::apiUrl(),
             username: $config['username'] ?? null,
             password: $config['password'] ?? null,
             apiKey: $config['api_key'] ?? null,

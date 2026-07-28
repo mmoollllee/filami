@@ -27,8 +27,10 @@ class SyncCommand extends Command
 
     public function handle(): int
     {
-        if (! Filami::apiConfigured()) {
-            $this->error('Umami is not configured — set UMAMI_URL plus UMAMI_USERNAME/UMAMI_PASSWORD (or UMAMI_API_KEY).');
+        // Credentials only: the endpoint may well come from the records
+        // themselves, so a missing UMAMI_URL is not a reason to abort here.
+        if (! Filami::hasCredentials()) {
+            $this->error('Umami credentials are missing — set UMAMI_USERNAME/UMAMI_PASSWORD (or UMAMI_API_KEY).');
 
             return self::FAILURE;
         }

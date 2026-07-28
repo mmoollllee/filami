@@ -6,19 +6,23 @@ use Mmoollllee\Filami\Filami;
 use Mmoollllee\Filami\UmamiClient;
 
 /**
- * Deletes an Umami website (including its data). Takes the plain website id
- * because the owning model is usually already gone when this runs.
+ * Deletes an Umami website (including its data). Takes the plain website id and
+ * endpoint because the owning model is usually already gone when this runs.
  */
 class DeprovisionUmamiWebsite extends UmamiJob
 {
-    public function __construct(public string $websiteId) {}
+    public function __construct(
+        public string $websiteId,
+        public ?string $apiUrl = null,
+    ) {}
 
-    public function handle(UmamiClient $client): void
+    public function handle(): void
     {
-        if (! Filami::apiConfigured()) {
+        if (! Filami::hasCredentials() || blank($this->apiUrl ?? Filami::apiUrl())) {
             return;
         }
 
-        $client->deleteWebsite($this->websiteId);
+        UmamiClient::fromConfig((array) config('filami', []), apiUrl: $this->apiUrl)
+            ->deleteWebsite($this->websiteId);
     }
 }

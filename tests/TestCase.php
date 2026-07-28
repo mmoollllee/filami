@@ -25,15 +25,17 @@ abstract class TestCase extends Orchestra
             $table->string('name')->nullable();
             $table->string('primary_domain')->nullable();
             $table->string('umami_website_id')->nullable();
+            $table->string('umami_url')->nullable();
             $table->timestamps();
         });
 
-        // "tracked_sites" exercises the trait with overridden column mapping.
+        // "tracked_sites" exercises the contract with overridden column mapping.
         Schema::create('tracked_sites', function (Blueprint $table): void {
             $table->id();
             $table->string('title')->nullable();
             $table->string('host')->nullable();
             $table->string('analytics_id')->nullable();
+            $table->string('endpoint')->nullable();
             $table->timestamps();
         });
     }

@@ -40,6 +40,11 @@ UMAMI_USERNAME=provisioner
 UMAMI_PASSWORD=secret
 ```
 
+Env is optional for tracking: a model that carries its own endpoint **and**
+website id is tracked without any configuration at all — see
+[Per-model endpoints](#per-model-endpoints). Credentials stay in env either
+way; they gate only the API features (provisioning, widgets).
+
 Self-hosted Umami has no API keys; filami logs in with a dedicated Umami user,
 caches the token and re-authenticates on 401. (Umami Cloud works too:
 `UMAMI_API_KEY` + `UMAMI_API_URL=https://api.umami.is/v1`.)
@@ -80,8 +85,32 @@ Storage/metadata resolution per model:
    ```
 
 2. Every other model falls back to the **attribute conventions** —
-   `umami_website_id`, `name`, and `primary_domain` / `domain` / host of
-   `url`. The trait delegates to exactly these, so both paths always agree.
+   `umami_website_id`, `umami_url`, `name`, and `primary_domain` / `domain` /
+   host of `url`. The trait delegates to exactly these, so both paths always
+   agree.
+
+## Per-model endpoints
+
+`umamiUrl()` (column `umami_url` by convention) lets each model name the Umami
+instance it reports to; blank falls back to `UMAMI_URL`. Everything follows
+that endpoint — the tracking snippet, provisioning, the widgets and the
+"open in Umami" link:
+
+```php
+$tenant->update([
+    'umami_url' => 'https://analytics.customer.example',
+    'umami_website_id' => '94db1cb1-…',
+]);
+```
+
+Those two values are all the snippet needs, so a site can be tracked purely
+from the admin UI with **no env configuration** — useful when each customer
+runs their own Umami. `filament-cms` exposes both as fields under
+*Seiten-Einstellungen → Statistik*.
+
+Credentials remain global (`UMAMI_USERNAME`/`UMAMI_PASSWORD` or
+`UMAMI_API_KEY`): they are secrets, and without them a per-tenant endpoint
+still tracks — it just cannot auto-provision or render widgets.
 
 So a model with `umami_website_id`, `name` and `primary_domain` columns needs
 no code at all besides `autoProvision()` — add that column yourself, filami

@@ -29,4 +29,9 @@ class TrackedSite extends Model implements UmamiTrackable
     {
         return $this->host;
     }
+
+    public function umamiUrl(): ?string
+    {
+        return $this->endpoint;
+    }
 }

@@ -46,46 +46,84 @@ class Filami
      */
     protected static ?WeakMap $listenersAttached = null;
 
-    /** Tracking-level switch: a URL is all the snippet needs. */
-    public static function enabled(): bool
+    /**
+     * Tracking-level switch: a URL is all the snippet needs. Every accessor
+     * below takes an optional model, so a tenant carrying its own endpoint can
+     * be tracked without any env configuration at all.
+     */
+    public static function enabled(mixed $model = null): bool
     {
-        return (bool) config('filami.enabled') && filled(config('filami.url'));
+        return (bool) config('filami.enabled') && filled(static::url($model));
     }
 
     /** API-level switch: provisioning and widgets additionally need credentials. */
-    public static function apiConfigured(): bool
+    public static function apiConfigured(mixed $model = null): bool
     {
-        return static::enabled() && (
-            filled(config('filami.api_key'))
-            || (filled(config('filami.username')) && filled(config('filami.password')))
-        );
+        return static::enabled($model) && static::hasCredentials();
     }
 
-    public static function url(): ?string
+    /**
+     * Whether API credentials exist. Always global — endpoints can be set per
+     * model, but credentials are secrets and stay in env.
+     */
+    public static function hasCredentials(): bool
     {
-        $url = config('filami.url');
+        return filled(config('filami.api_key'))
+            || (filled(config('filami.username')) && filled(config('filami.password')));
+    }
+
+    /** The Umami instance a model reports to: its own endpoint, else the configured one. */
+    public static function url(mixed $model = null): ?string
+    {
+        $url = static::modelUrl($model) ?? config('filami.url');
 
         return filled($url) ? rtrim((string) $url, '/') : null;
     }
 
-    public static function apiUrl(): ?string
+    public static function apiUrl(mixed $model = null): ?string
     {
-        $apiUrl = config('filami.api_url');
-
-        if (filled($apiUrl)) {
+        // A model-level endpoint owns its API path too; the configured
+        // api_url override only applies to the configured endpoint.
+        if (static::modelUrl($model) === null && filled($apiUrl = config('filami.api_url'))) {
             return rtrim((string) $apiUrl, '/');
         }
 
-        return static::url() ? static::url().'/api' : null;
+        return static::url($model) ? static::url($model).'/api' : null;
     }
 
-    public static function websiteDashboardUrl(?string $websiteId): ?string
+    /** A client bound to the instance $model reports to. */
+    public static function client(mixed $model = null): UmamiClient
     {
-        if (blank($websiteId) || static::url() === null) {
+        $apiUrl = static::apiUrl($model);
+
+        // Same instance as the configured default — reuse the container binding.
+        return $apiUrl === static::apiUrl(null)
+            ? app(UmamiClient::class)
+            : UmamiClient::fromConfig((array) config('filami', []), apiUrl: $apiUrl);
+    }
+
+    public static function websiteDashboardUrl(?string $websiteId, mixed $model = null): ?string
+    {
+        $url = static::url($model);
+
+        if (blank($websiteId) || $url === null) {
             return null;
         }
 
-        return static::url().'/websites/'.$websiteId;
+        return $url.'/websites/'.$websiteId;
+    }
+
+    protected static function modelUrl(mixed $model): ?string
+    {
+        if (! $model instanceof Model) {
+            return null;
+        }
+
+        $url = $model instanceof UmamiTrackable
+            ? $model->umamiUrl()
+            : static::conventionalUrl($model);
+
+        return filled($url) ? (string) $url : null;
     }
 
     public static function websiteId(mixed $model): ?string
@@ -148,6 +186,13 @@ class Filami
         $name = $model->getAttribute('name');
 
         return filled($name) ? (string) $name : class_basename($model).' #'.$model->getKey();
+    }
+
+    public static function conventionalUrl(Model $model): ?string
+    {
+        $url = $model->getAttribute('umami_url');
+
+        return filled($url) ? (string) $url : null;
     }
 
     public static function conventionalDomain(Model $model): ?string
@@ -244,7 +289,7 @@ class Filami
     /** Whether the tracking snippet renders right now — for privacy pages etc. */
     public static function tracks(mixed $model = null): bool
     {
-        return static::enabled()
+        return static::enabled($model)
             && static::environmentAllowed()
             && filled(static::websiteIdFor($model));
     }
@@ -252,14 +297,49 @@ class Filami
     /** Whether filami.tracking.environments covers the current environment. */
     public static function environmentAllowed(): bool
     {
-        $environments = (array) config('filami.tracking.environments', ['production']);
+        $environments = static::trackingEnvironments();
 
         return in_array('*', $environments, true) || app()->environment($environments);
     }
 
+    /** @return list<string> */
+    public static function trackingEnvironments(): array
+    {
+        return array_values((array) config('filami.tracking.environments', ['production']));
+    }
+
+    /**
+     * Why the snippet does not render for $model, as a translated sentence —
+     * or null when it does. The gate is otherwise silent, which makes a
+     * correctly configured site look broken.
+     */
+    public static function inactiveReason(mixed $model = null): ?string
+    {
+        if (static::tracks($model)) {
+            return null;
+        }
+
+        if (! (bool) config('filami.enabled')) {
+            return __('filami::status.disabled');
+        }
+
+        if (blank(static::url($model))) {
+            return __('filami::status.no_endpoint');
+        }
+
+        if (blank(static::websiteIdFor($model))) {
+            return __('filami::status.no_website_id');
+        }
+
+        return __('filami::status.wrong_environment', [
+            'environments' => implode(', ', static::trackingEnvironments()),
+            'current' => app()->environment(),
+        ]);
+    }
+
     protected static function handleCreated(Model $record): void
     {
-        if (! static::apiConfigured() || ! static::passesFilter($record)) {
+        if (! static::apiConfigured($record) || ! static::passesFilter($record)) {
             return;
         }
 
@@ -272,7 +352,7 @@ class Filami
 
     protected static function handleUpdated(Model $record): void
     {
-        if (! static::apiConfigured() || ! static::passesFilter($record)) {
+        if (! static::apiConfigured($record) || ! static::passesFilter($record)) {
             return;
         }
 
@@ -287,7 +367,7 @@ class Filami
 
     protected static function handleDeleted(Model $record): void
     {
-        if (! config('filami.deprovision_on_delete') || ! static::apiConfigured()) {
+        if (! config('filami.deprovision_on_delete') || ! static::apiConfigured($record)) {
             return;
         }
 
@@ -308,7 +388,11 @@ class Filami
             return;
         }
 
-        DeprovisionUmamiWebsite::dispatch($websiteId)->onQueue(config('filami.queue'))->afterCommit();
+        // The endpoint travels with the id: by the time this job runs the record
+        // is gone, so its own Umami instance can no longer be resolved from it.
+        DeprovisionUmamiWebsite::dispatch($websiteId, static::apiUrl($record))
+            ->onQueue(config('filami.queue'))
+            ->afterCommit();
     }
 
     /**
