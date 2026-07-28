@@ -1,0 +1,45 @@
+{
+    "name": "mmoollllee/filami",
+    "description": "Umami analytics for Filament panels: auto-provisions an Umami website per tenant, ships the tracking snippet and dashboard widgets (self-hosted friendly).",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "filament/filament": "^5.0",
+        "laravel/framework": "^12.0|^13.0"
+    },
+    "require-dev": {
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^4.4",
+        "pestphp/pest-plugin-laravel": "^4.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Mmoollllee\\Filami\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Mmoollllee\\Filami\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mmoollllee\\Filami\\FilamiServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "@php vendor/bin/pest"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

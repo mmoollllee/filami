@@ -1,0 +1,7 @@
+# Keep dev-only scaffolding out of the Composer `--prefer-dist` archive so consuming
+# apps don't pull the test suite, docs and build tooling into vendor/.
+/tests            export-ignore
+/docs             export-ignore
+phpunit.xml.dist  export-ignore
+.gitattributes    export-ignore
+.gitignore        export-ignore
