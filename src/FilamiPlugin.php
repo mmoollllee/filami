@@ -4,15 +4,14 @@ namespace Mmoollllee\Filami;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
-use Mmoollllee\Filami\Filament\Widgets\UmamiEventsWidget;
-use Mmoollllee\Filami\Filament\Widgets\UmamiStatsOverviewWidget;
-use Mmoollllee\Filami\Filament\Widgets\UmamiTopPagesWidget;
-use Mmoollllee\Filami\Filament\Widgets\UmamiVisitorsChartWidget;
+use Mmoollllee\Filami\Filament\Pages\UmamiStatistics;
 
 /**
- * Registers the Umami widgets on a panel. Panels whose dashboard lists its
- * widgets explicitly (like filament-cms) reference the widget classes there
- * instead and do not need this plugin.
+ * Registers the analytics page on a panel — the widgets come with it, so a
+ * panel gets a "Statistics" entry and its dashboard stays about the work.
+ *
+ * Panels that would rather show the widgets on their own dashboard reference
+ * the widget classes there instead and do not need this plugin.
  */
 class FilamiPlugin implements Plugin
 {
@@ -28,12 +27,7 @@ class FilamiPlugin implements Plugin
 
     public function register(Panel $panel): void
     {
-        $panel->widgets([
-            UmamiStatsOverviewWidget::class,
-            UmamiVisitorsChartWidget::class,
-            UmamiTopPagesWidget::class,
-            UmamiEventsWidget::class,
-        ]);
+        $panel->pages([UmamiStatistics::class]);
     }
 
     public function boot(Panel $panel): void {}

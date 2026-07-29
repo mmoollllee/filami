@@ -18,10 +18,11 @@ use Throwable;
  * against the previous window. Hides itself without credentials or website.
  *
  * This widget owns the reporting-window select for the whole analytics section
- * — one control rather than three, with the chart and the top-pages table
- * following along ({@see InteractsWithUmami}). It therefore has to be on the
- * dashboard for the window to be changeable; the other two read the shared
- * state but do not render a control of their own.
+ * — one control rather than four, with the chart and the two tables following
+ * along ({@see InteractsWithUmami}). It therefore has to be on the page for
+ * the window to be changeable; the others read the shared state but render no
+ * control of their own. {@see \Mmoollllee\Filami\Filament\Pages\UmamiStatistics}
+ * puts all four together.
  */
 class UmamiStatsOverviewWidget extends StatsOverviewWidget
 {
@@ -44,11 +45,15 @@ class UmamiStatsOverviewWidget extends StatsOverviewWidget
         return ['@md' => 3, '@xl' => 5, '!@lg' => 5];
     }
 
+    /**
+     * None: the page this sits on is titled "Statistics", and a card heading
+     * repeating it (or naming the vendor, as it used to) tells a reader
+     * nothing. The window select still renders — Filament shows the section
+     * header for it either way.
+     */
     public function getHeading(): ?string
     {
-        // No day count here any more: the select right next to it says which
-        // window is on display, and repeating it only invites the two to drift.
-        return __('filami::widgets.stats_heading');
+        return null;
     }
 
     /** Hangs the window select off the section header, next to the heading. */

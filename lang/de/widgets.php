@@ -1,8 +1,6 @@
 <?php
 
 return [
-    // No day count: the select next to the heading names the window.
-    'stats_heading' => 'Umami',
     'period_label' => 'Zeitraum',
     'active_now' => 'Jetzt aktiv',
     'active_now_description' => 'letzte 5 Minuten',

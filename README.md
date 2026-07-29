@@ -1,7 +1,7 @@
 # filami
 
 Umami analytics for Filament panels: provisions an Umami website per tenant
-automatically, ships the tracking snippet and dashboard widgets. Built for
+automatically, ships the tracking snippet and a statistics page. Built for
 self-hosted Umami v3 (v2-tolerant), Filament 5 native.
 
 - **Auto-provisioning** — `Filami::autoProvision(Tenant::class)` attaches
@@ -11,10 +11,10 @@ self-hosted Umami v3 (v2-tolerant), Filament 5 native.
 - **Tracking snippet** — `<x-filami::tracking :for="$tenant" />` renders
   dns-prefetch/preconnect plus the deferred script tag; renders nothing when
   disabled, without an id, or outside allowed environments.
-- **Dashboard widgets** — stats overview (live visitors, visitors, pageviews,
-  visit time, bounce rate vs. previous period), visitors/pageviews chart with
-  range filter, top pages with a deep link into Umami. All tenant-aware and
-  self-hiding, labels localized (de/en).
+- **Statistics page** — a panel page carrying the stats overview (live
+  visitors, visitors, pageviews, visit time, bounce rate vs. previous period),
+  the visitors/pageviews chart, top pages and recorded events, all sharing one
+  reporting window. Tenant-aware and self-hiding, labels localized (de/en).
 - **Backfill** — `php artisan filami:sync` provisions everything that existed
   before the integration. `--push` also re-sends name/domain for linked
   records and re-links any id the instance does not know (e.g. left over from
@@ -211,17 +211,31 @@ German wording — copy it into a project's `config/consent-control.php`.
 Granting the recorder without the tracker does nothing: it waits for the
 tracker's session and gives up after five seconds.
 
-## Widgets
+## The statistics page
 
-Panels with an explicit dashboard widget list reference the classes directly:
+The widgets live on a page of their own — "Statistiken" / "Statistics" — so a
+panel's dashboard stays about the work:
+
+```php
+->plugin(FilamiPlugin::make())
+{{-- or, explicitly: --}}
+->pages([Dashboard::class, \Mmoollllee\Filami\Filament\Pages\UmamiStatistics::class])
+```
+
+The page hides itself from the navigation under exactly the conditions its
+widgets do, so a panel without credentials or a website id shows no dead menu
+entry. Its route path is `statistics`; subclass it to change that, the title
+or which widgets appear.
+
+Prefer them on the dashboard instead? Reference the widget classes in that
+page's own widget list:
 
 ```php
 use Mmoollllee\Filami\Filament\Widgets\UmamiStatsOverviewWidget;
-use Mmoollllee\Filami\Filament\Widgets\UmamiTopPagesWidget;
 use Mmoollllee\Filami\Filament\Widgets\UmamiVisitorsChartWidget;
+use Mmoollllee\Filami\Filament\Widgets\UmamiTopPagesWidget;
+use Mmoollllee\Filami\Filament\Widgets\UmamiEventsWidget;
 ```
-
-Alternatively register all three at once: `->plugin(FilamiPlugin::make())`.
 
 The website id comes from the current Filament tenant. `UMAMI_WEBSITE_ID` is
 used only *outside* tenancy: a tenant that has no website yet shows nothing
