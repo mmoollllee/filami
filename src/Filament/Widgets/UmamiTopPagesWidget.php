@@ -2,42 +2,72 @@
 
 namespace Mmoollllee\Filami\Filament\Widgets;
 
-use Filament\Widgets\Widget;
-use Mmoollllee\Filami\Filament\Widgets\Concerns\InteractsWithUmami;
-use Throwable;
+use Filament\Actions\Action;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ViewColumn;
+use Filament\Tables\Table;
 
-/** Most-visited paths within the reporting window, with a link into Umami. */
-class UmamiTopPagesWidget extends Widget
+/**
+ * Most-visited paths within the shared reporting window, with a link into
+ * Umami.
+ *
+ * The ceiling from widgets.top_pages_limit is real: a site with more distinct
+ * paths than the limit has a tail the table never shows, which is what the
+ * "open in Umami" action is for.
+ */
+class UmamiTopPagesWidget extends UmamiTableWidget
 {
-    use InteractsWithUmami;
-
-    protected string $view = 'filami::widgets.top-pages';
-
     protected static ?int $sort = 32;
 
-    protected int|string|array $columnSpan = 1;
-
-    protected function getViewData(): array
+    public function table(Table $table): Table
     {
-        $websiteId = $this->umamiWebsiteId();
-        $days = $this->periodDays();
+        // Resolved once: both closures below asked for it, and each call walks
+        // the tenant, its attributes and the config.
+        $dashboardUrl = $this->umamiDashboardUrl($this->umamiWebsiteId());
 
-        $pages = null;
+        return $this->configureUmamiTable($table)
+            ->heading(__('filami::widgets.top_pages'))
+            ->headerActions([
+                Action::make('openInUmami')
+                    ->label(__('filami::widgets.open_in_umami'))
+                    ->icon(Heroicon::ArrowTopRightOnSquare)
+                    ->link()
+                    ->url($dashboardUrl, shouldOpenInNewTab: true)
+                    ->visible(filled($dashboardUrl)),
+            ])
+            ->columns([
+                TextColumn::make('path')
+                    ->label(__('filami::widgets.page_path'))
+                    ->weight('medium')
+                    // Long paths would otherwise widen the column past the
+                    // widget and push the count out of sight.
+                    ->limit(48)
+                    ->tooltip(fn (array $record): string => $record['path']),
+                ViewColumn::make('share')
+                    ->label('')
+                    ->view('filami::widgets.share-bar')
+                    ->grow(false),
+                TextColumn::make('views')
+                    ->label(__('filami::widgets.pageviews'))
+                    ->numeric()
+                    ->alignEnd(),
+            ])
+            ->emptyStateIcon(Heroicon::OutlinedChartBar);
+    }
 
-        if (filled($websiteId)) {
-            try {
-                // v3 calls the pathname metric "path" (v2 called it "url").
-                $pages = $this->umami()->metrics($websiteId, 'path', now()->subDays($days), now(), 8);
-            } catch (Throwable $exception) {
-                report($exception);
-            }
-        }
+    /** @return list<array{path: string, views: int, share: float}> */
+    protected function rows(): array
+    {
+        $metrics = $this->fetchRows(fn (string $websiteId): array => $this->umami()->metrics(
+            $websiteId,
+            // v3 calls the pathname metric "path" (v2 called it "url").
+            'path',
+            $this->umamiPeriod()->start(),
+            now(),
+            max(1, (int) config('filami.widgets.top_pages_limit', 100)),
+        ));
 
-        return [
-            'pages' => $pages,
-            'max' => max(1, (int) collect($pages ?? [])->max('y')),
-            'days' => $days,
-            'umamiUrl' => $this->umamiDashboardUrl($websiteId),
-        ];
+        return $this->withShare($metrics, 'path', 'views', blankLabel: '/');
     }
 }

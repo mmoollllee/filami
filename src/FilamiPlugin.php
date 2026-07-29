@@ -4,6 +4,7 @@ namespace Mmoollllee\Filami;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Mmoollllee\Filami\Filament\Widgets\UmamiEventsWidget;
 use Mmoollllee\Filami\Filament\Widgets\UmamiStatsOverviewWidget;
 use Mmoollllee\Filami\Filament\Widgets\UmamiTopPagesWidget;
 use Mmoollllee\Filami\Filament\Widgets\UmamiVisitorsChartWidget;
@@ -31,6 +32,7 @@ class FilamiPlugin implements Plugin
             UmamiStatsOverviewWidget::class,
             UmamiVisitorsChartWidget::class,
             UmamiTopPagesWidget::class,
+            UmamiEventsWidget::class,
         ]);
     }
 

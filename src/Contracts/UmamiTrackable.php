@@ -26,4 +26,12 @@ interface UmamiTrackable
      * website id that is enough to track, no env required.
      */
     public function umamiUrl(): ?string;
+
+    /**
+     * Whether to load the session-replay recorder alongside the tracker.
+     * Mirror whatever is enabled for this website in Umami: the recorder is a
+     * second script, and recording against a website that has the feature
+     * switched off just ships bytes nobody reads.
+     */
+    public function umamiRecorderEnabled(): bool;
 }

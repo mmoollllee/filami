@@ -32,6 +32,14 @@ class Filami
     protected static array $provisioned = [];
 
     /**
+     * Clients for models that name their own Umami instance, keyed by api URL.
+     * Reset by {@see flush()}; the container binding covers the default one.
+     *
+     * @var array<string, UmamiClient>
+     */
+    protected static array $clients = [];
+
+    /**
      * Listener bookkeeping per event-dispatcher instance: these statics survive
      * app rebuilds (tests, Octane) while listeners do not, so a fresh dispatcher
      * must re-attach even when the registration is already known.
@@ -88,18 +96,33 @@ class Filami
             return rtrim((string) $apiUrl, '/');
         }
 
-        return static::url($model) ? static::url($model).'/api' : null;
+
+        $url = static::url($model);
+
+        return $url !== null ? $url.'/api' : null;
     }
 
-    /** A client bound to the instance $model reports to. */
+    /**
+     * A client bound to the instance $model reports to.
+     *
+     * Memoised per api-URL: the container binding is scoped, but a model with
+     * its own endpoint never reaches it, and the dashboard resolves a client
+     * several times per render — each one re-deriving the URL and re-reading
+     * the whole config array.
+     */
     public static function client(mixed $model = null): UmamiClient
     {
         $apiUrl = static::apiUrl($model);
 
         // Same instance as the configured default — reuse the container binding.
-        return $apiUrl === static::apiUrl(null)
-            ? app(UmamiClient::class)
-            : UmamiClient::fromConfig((array) config('filami', []), apiUrl: $apiUrl);
+        if ($apiUrl === static::apiUrl(null)) {
+            return app(UmamiClient::class);
+        }
+
+        return static::$clients[$apiUrl] ??= UmamiClient::fromConfig(
+            (array) config('filami', []),
+            apiUrl: $apiUrl,
+        );
     }
 
     public static function websiteDashboardUrl(?string $websiteId, mixed $model = null): ?string
@@ -195,6 +218,11 @@ class Filami
         return filled($url) ? (string) $url : null;
     }
 
+    public static function conventionalRecorder(Model $model): bool
+    {
+        return (bool) $model->getAttribute('umami_replay');
+    }
+
     public static function conventionalDomain(Model $model): ?string
     {
         $domain = $model->getAttribute('primary_domain') ?? $model->getAttribute('domain');
@@ -286,6 +314,32 @@ class Filami
         return filled($websiteId) ? (string) $websiteId : null;
     }
 
+    /**
+     * Whether the session-replay recorder actually loads for $model — the
+     * recorder counterpart of {@see tracks()}, and safe to ask on a privacy
+     * page. It implies tracking: the recorder waits for the tracker's session
+     * and gives up after five seconds, so it can never run on its own.
+     *
+     * Umami enables replay (and the heatmaps derived from it) per website, so
+     * a model decides for itself; the config flag applies only without one.
+     */
+    public static function recordsSessions(mixed $model = null): bool
+    {
+        return static::tracks($model) && static::recorderRequested($model);
+    }
+
+    /** The raw "should this site be recorded" switch, without the tracking guards. */
+    protected static function recorderRequested(mixed $model): bool
+    {
+        if (! $model instanceof Model) {
+            return (bool) config('filami.tracking.recorder', false);
+        }
+
+        return $model instanceof UmamiTrackable
+            ? $model->umamiRecorderEnabled()
+            : static::conventionalRecorder($model);
+    }
+
     /** Whether the tracking snippet renders right now — for privacy pages etc. */
     public static function tracks(mixed $model = null): bool
     {
@@ -300,6 +354,95 @@ class Filami
         $environments = static::trackingEnvironments();
 
         return in_array('*', $environments, true) || app()->environment($environments);
+    }
+
+    /**
+     * Consent category the tracker must wait for, or null to load it right
+     * away. See config('filami.tracking.consent') for why counting pageviews
+     * and recording sessions are gated separately.
+     */
+    public static function trackingConsent(): ?string
+    {
+        return static::consentCategory('tracking');
+    }
+
+    /**
+     * Whether tel:/mailto: link clicks are tracked at all.
+     *
+     * Public because hosts label links filami's own listener cannot recognise
+     * by href — filament-cms does this for the obfuscated contact links its
+     * rich text produces — and they must honour the same switch and the same
+     * names, or one action lands in Umami under two event series.
+     */
+    public static function linkEventsEnabled(): bool
+    {
+        return (bool) config('filami.events.links', true);
+    }
+
+    public static function phoneEvent(): string
+    {
+        return static::eventName('phone_event', 'phone-click');
+    }
+
+    public static function emailEvent(): string
+    {
+        return static::eventName('email_event', 'email-click');
+    }
+
+    public static function outboundEvent(): string
+    {
+        return static::eventName('outbound_event', 'outbound-click');
+    }
+
+    /** Whether clicks leaving the site are counted. */
+    public static function outboundEventsEnabled(): bool
+    {
+        return (bool) config('filami.events.outbound', true);
+    }
+
+    /**
+     * Hosts that count as "us" besides the one being served — a site spread
+     * over several domains would otherwise record every hop between them as
+     * leaving.
+     *
+     * @return list<string>
+     */
+    public static function internalDomains(): array
+    {
+        $domains = config('filami.events.internal_domains', []);
+
+        return array_values(array_filter(
+            is_array($domains) ? $domains : [],
+            fn ($domain): bool => is_string($domain) && $domain !== '',
+        ));
+    }
+
+    /** A configured event name, or the default when it is unset or blank. */
+    public static function eventName(string $key, string $default): string
+    {
+        $name = config("filami.events.{$key}");
+
+        return is_string($name) && $name !== '' ? $name : $default;
+    }
+
+    /** Consent category for the recorder; falls back to the tracking one. */
+    public static function recorderConsent(): ?string
+    {
+        return static::consentCategory('recorder') ?? static::trackingConsent();
+    }
+
+    /**
+     * A category is a non-empty string and nothing else. Deliberately not
+     * filled(): env('…=false') yields boolean false, which filled() reports as
+     * present and (string) turns into '' — that would skip the fallback AND
+     * render an empty marker, leaving the recorder ungated while the tracker
+     * is gated, i.e. exactly backwards.
+     */
+    protected static function consentCategory(string $key): ?string
+    {
+        $category = config("filami.tracking.consent.{$key}");
+
+        return is_string($category) && $category !== '' ? $category : null;
     }
 
     /** @return list<string> */
@@ -403,5 +546,6 @@ class Filami
     public static function flush(): void
     {
         static::$provisioned = [];
+        static::$clients = [];
     }
 }

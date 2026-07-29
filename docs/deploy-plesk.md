@@ -167,7 +167,22 @@ Keep `/var/backups` inside the Plesk backup scope (or rotate with `find
 -mtime +14 -delete`). Restore = `gunzip -c dump.sql.gz | docker compose exec
 -T db psql -U umami umami` into a fresh volume.
 
-## 7. Notes
+## 7. Session replay & heatmaps (optional)
+
+Enable per website in Umami (Websites → Edit → *Replays & Heatmaps*), then
+switch the site on in the app — filami adds the second recorder script. Replay
+needs Umami 3.1+, heatmaps 3.2+.
+
+Two operational caveats:
+
+- **Disk.** The open-source build ships no retention job for recorded
+  sessions, so `session_replay` grows unbounded. Watch the volume and prune
+  yourself if you enable this on busy sites.
+- **Heatmaps frame the tracked site.** The overlay is a live `<iframe>` of the
+  real page. Any site answering `X-Frame-Options: SAMEORIGIN` shows a blank
+  overlay — it has to allow framing by the Umami origin.
+
+## 8. Notes
 
 - The container port stays loopback-only (`127.0.0.1:3001`) — never expose it
   publicly; the Plesk firewall does not need an extra rule.

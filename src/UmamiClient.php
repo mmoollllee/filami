@@ -108,7 +108,7 @@ class UmamiClient
     public function stats(string $websiteId, CarbonInterface $startAt, CarbonInterface $endAt): UmamiStats
     {
         $data = $this->remember(
-            sprintf('stats:%s:%s', $websiteId, $this->cacheWindow($startAt, $endAt)),
+            $this->cacheKey('stats', [], $startAt, $endAt, $websiteId),
             $this->cacheTtl,
             fn () => $this->send('get', "/websites/{$websiteId}/stats", $this->window($startAt, $endAt))->throw()->json(),
         );
@@ -120,7 +120,7 @@ class UmamiClient
     public function activeVisitors(string $websiteId): int
     {
         $data = $this->remember(
-            "active:{$websiteId}",
+            'active:'.hash('xxh128', $this->apiUrl."\0".$websiteId),
             $this->activeCacheTtl,
             fn () => $this->send('get', "/websites/{$websiteId}/active")->throw()->json(),
         );
@@ -146,7 +146,7 @@ class UmamiClient
         ];
 
         $data = $this->remember(
-            'pageviews:'.md5(implode('|', [$websiteId, $unit, $query['timezone'], $this->cacheWindow($startAt, $endAt)])),
+            $this->cacheKey('pageviews', [$unit, (string) $query['timezone']], $startAt, $endAt, $websiteId),
             $this->cacheTtl,
             fn () => $this->send('get', "/websites/{$websiteId}/pageviews", $query)->throw()->json(),
         );
@@ -171,12 +171,148 @@ class UmamiClient
         $query = $this->window($startAt, $endAt) + ['type' => $type, 'limit' => $limit];
 
         $data = $this->remember(
-            'metrics:'.md5(implode('|', [$websiteId, $type, $limit, $this->cacheWindow($startAt, $endAt)])),
+            $this->cacheKey('metrics', [$type, (string) $limit], $startAt, $endAt, $websiteId),
             $this->cacheTtl,
             fn () => $this->send('get', "/websites/{$websiteId}/metrics", $query)->throw()->json(),
         );
 
-        return is_array($data) ? array_values($data) : [];
+        return static::unwrapList($data);
+    }
+
+    /**
+     * Custom events with their counts — the same metrics endpoint, named for
+     * what it answers here so callers do not have to know that "event" is a
+     * valid $type.
+     *
+     * @return list<array{x: string, y: int}>
+     */
+    public function events(
+        string $websiteId,
+        CarbonInterface $startAt,
+        CarbonInterface $endAt,
+        int $limit = 100,
+    ): array {
+        return $this->metrics($websiteId, 'event', $startAt, $endAt, $limit);
+    }
+
+    /**
+     * Which properties were recorded with which event, and how often. Answers
+     * "is there anything to break this event down by" before a values call.
+     *
+     * @return list<array{eventName: string, propertyName: string, total: int}>
+     */
+    public function eventProperties(string $websiteId, CarbonInterface $startAt, CarbonInterface $endAt): array
+    {
+        return $this->remember(
+            $this->cacheKey('event-properties', [], $startAt, $endAt, $websiteId),
+            $this->cacheTtl,
+            // Normalized INSIDE remember(), so a cache hit does not re-walk the
+            // whole payload on every render.
+            fn () => $this->normalizeEventRows(
+                $this->sendOrNull('get', "/websites/{$websiteId}/event-data/properties", $this->window($startAt, $endAt))?->json() ?? [],
+                ['eventName', 'propertyName', 'total'],
+            ),
+        );
+    }
+
+    /**
+     * The recorded values of one property of one event, with counts — e.g.
+     * which machine a "contact-form-submit" was about.
+     *
+     * @return list<array{value: string, total: int}>
+     */
+    public function eventPropertyValues(
+        string $websiteId,
+        string $eventName,
+        string $propertyName,
+        CarbonInterface $startAt,
+        CarbonInterface $endAt,
+    ): array {
+        // Both spellings: the endpoint is documented with `event`, but builds
+        // in the wild validate `eventName` and reject the request outright.
+        // Sending the pair costs nothing and works either way.
+        $query = $this->window($startAt, $endAt) + [
+            'event' => $eventName,
+            'eventName' => $eventName,
+            'propertyName' => $propertyName,
+        ];
+
+        return $this->remember(
+            $this->cacheKey('event-values', [$eventName, $propertyName], $startAt, $endAt, $websiteId),
+            $this->cacheTtl,
+            fn () => $this->normalizeEventRows(
+                $this->sendOrNull('get', "/websites/{$websiteId}/event-data/values", $query)?->json() ?? [],
+                ['value', 'total'],
+            ),
+        );
+    }
+
+    /**
+     * The event-data endpoints are the least stable corner of the API — they
+     * moved between builds and are absent on older ones (which answer 404, so
+     * sendOrNull() already yields []). Rows are therefore kept only when they
+     * carry every key the caller was promised, rather than trusting the shape.
+     *
+     * @param  list<string>  $keys
+     * @return list<array<string, mixed>>
+     */
+    protected function normalizeEventRows(mixed $data, array $keys): array
+    {
+        if (! is_array($data)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            static::unwrapList($data),
+            fn (array $row): bool => ! array_diff($keys, array_keys($row)),
+        ));
+    }
+
+    /**
+     * A list out of whatever shape the endpoint answered.
+     *
+     * v3 paginates some responses under "data" while others answer a bare
+     * array, and this is the one place that knows it — a caller that had to
+     * unwrap the envelope itself would be repairing the client's own output.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected static function unwrapList(mixed $data): array
+    {
+        if (! is_array($data)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            is_array($data['data'] ?? null) ? $data['data'] : $data,
+            is_array(...),
+        ));
+    }
+
+    /**
+     * Cache key for one read.
+     *
+     * The API URL is part of it, not just the website id: a model can name its
+     * own Umami instance, and two tenants pointing at DIFFERENT servers with
+     * the same website id — which the profile page invites, since an id can be
+     * typed in by hand — would otherwise read each other's numbers out of the
+     * shared cache. The token key has always included it; the payload keys had
+     * not.
+     *
+     * The parts are hashed rather than joined raw because event and property
+     * names are free-form app/editor strings: a literal '|' in one of them
+     * would let two different (event, property) pairs produce one key.
+     *
+     * @param  list<string>  $parts
+     */
+    protected function cacheKey(string $prefix, array $parts, CarbonInterface $startAt, CarbonInterface $endAt, string $websiteId): string
+    {
+        return $prefix.':'.hash('xxh128', implode("\0", [
+            (string) $this->apiUrl,
+            $websiteId,
+            ...$parts,
+            $this->cacheWindow($startAt, $endAt),
+        ]));
     }
 
     /** @return array{startAt: int, endAt: int} */

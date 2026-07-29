@@ -32,6 +32,9 @@ class SyncUmamiWebsite extends UmamiModelJob
             return;
         }
 
+        // Name and domain only. Umami's update is partial, so omitting
+        // replayConfig leaves session replay and heatmaps exactly as they were
+        // configured in its UI — sending it as null would reset them.
         $updated = Filami::client($this->model)
             ->updateWebsite($websiteId, ['name' => $meta['name'], 'domain' => $meta['domain']]);
 

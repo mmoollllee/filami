@@ -10,10 +10,29 @@ use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
 {
+    /**
+     * The full Filament stack, so the widgets can be rendered rather than only
+     * inspected. Order matters: Filament\Support has to register before
+     * Livewire, otherwise Livewire's component resolution runs before Filament
+     * has hooked into it and every Filament component fails to mount.
+     */
     protected function getPackageProviders($app): array
     {
         return [
+            \BladeUI\Icons\BladeIconsServiceProvider::class,
+            \BladeUI\Heroicons\BladeHeroiconsServiceProvider::class,
+            \Filament\Support\SupportServiceProvider::class,
+            \Livewire\LivewireServiceProvider::class,
+            \Filament\Actions\ActionsServiceProvider::class,
+            \Filament\Forms\FormsServiceProvider::class,
+            \Filament\Infolists\InfolistsServiceProvider::class,
+            \Filament\Notifications\NotificationsServiceProvider::class,
+            \Filament\Schemas\SchemasServiceProvider::class,
+            \Filament\Tables\TablesServiceProvider::class,
+            \Filament\Widgets\WidgetsServiceProvider::class,
+            \Filament\FilamentServiceProvider::class,
             FilamiServiceProvider::class,
+            Fixtures\TestPanelProvider::class,
         ];
     }
 
@@ -26,6 +45,7 @@ abstract class TestCase extends Orchestra
             $table->string('primary_domain')->nullable();
             $table->string('umami_website_id')->nullable();
             $table->string('umami_url')->nullable();
+            $table->boolean('umami_replay')->default(false);
             $table->timestamps();
         });
 
@@ -36,6 +56,7 @@ abstract class TestCase extends Orchestra
             $table->string('host')->nullable();
             $table->string('analytics_id')->nullable();
             $table->string('endpoint')->nullable();
+            $table->boolean('records')->default(false);
             $table->timestamps();
         });
     }

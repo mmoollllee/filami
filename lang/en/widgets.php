@@ -1,9 +1,11 @@
 <?php
 
 return [
-    'stats_heading' => 'Umami · Last :days days',
+    // No day count: the select next to the heading names the window.
+    'stats_heading' => 'Umami',
+    'period_label' => 'Period',
     'active_now' => 'Active now',
-    'active_now_description' => 'within the last 5 minutes',
+    'active_now_description' => 'last 5 minutes',
     'visitors' => 'Visitors',
     'sessions' => 'Sessions',
     'pageviews' => 'Pageviews',
@@ -19,8 +21,16 @@ return [
         '90d' => 'Last 90 days',
     ],
     'top_pages' => 'Top pages',
-    'period_days' => 'Last :days days',
+    'page_path' => 'Page',
     'open_in_umami' => 'Open in Umami',
     'no_data' => 'No data recorded yet.',
     'unreachable' => 'Umami is currently unreachable.',
+    'events' => 'Events',
+    'event_name' => 'Event',
+    'event_count' => 'Count',
+    'breakdown' => 'Break down',
+    'close' => 'Close',
+    'no_events' => 'No events recorded yet.',
+    'no_events_hint' => 'Phone/mail link clicks and submitted forms appear here as they happen.',
+    'no_event_properties' => 'No properties were recorded with this event.',
 ];

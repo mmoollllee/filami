@@ -7,7 +7,13 @@ use Illuminate\Support\Carbon;
 use Mmoollllee\Filami\Filament\Widgets\Concerns\InteractsWithUmami;
 use Throwable;
 
-/** Sessions and pageviews over time for the current tenant's website. */
+/**
+ * Sessions and pageviews over time for the current tenant's website.
+ *
+ * The window comes from the shared state the stats widget controls, not from a
+ * filter of its own — two selects a few pixels apart, each relabelling half the
+ * dashboard, is how a reader ends up comparing two different weeks by accident.
+ */
 class UmamiVisitorsChartWidget extends ChartWidget
 {
     use InteractsWithUmami;
@@ -17,27 +23,28 @@ class UmamiVisitorsChartWidget extends ChartWidget
     protected int|string|array $columnSpan = 1;
 
     /**
+     * Capped so the chart cannot outgrow the top-pages table beside it: without
+     * it Chart.js takes whatever height the grid row offers, and the pair stops
+     * lining up as soon as the table holds fewer rows than its page size.
+     */
+    protected ?string $maxHeight = '14rem';
+
+    /**
      * Filament polls widgets every 5s by default. The underlying responses are
      * cached for minutes, so that would be ~700 Livewire round-trips an hour
      * per open tab re-rendering byte-identical output.
      */
     protected ?string $pollingInterval = '60s';
 
-    public ?string $filter = '30d';
-
     public function getHeading(): ?string
     {
         return __('filami::widgets.chart_heading');
     }
 
-    protected function getFilters(): ?array
+    /** Names the window this chart is showing — the select itself lives next door. */
+    public function getDescription(): ?string
     {
-        return [
-            '24h' => __('filami::widgets.filters.24h'),
-            '7d' => __('filami::widgets.filters.7d'),
-            '30d' => __('filami::widgets.filters.30d'),
-            '90d' => __('filami::widgets.filters.90d'),
-        ];
+        return $this->umamiPeriod()->label();
     }
 
     protected function getType(): string
@@ -53,21 +60,19 @@ class UmamiVisitorsChartWidget extends ChartWidget
             return ['datasets' => [], 'labels' => []];
         }
 
-        [$start, $unit] = match ($this->filter) {
-            '24h' => [now()->subDay(), 'hour'],
-            '7d' => [now()->subDays(7), 'day'],
-            '90d' => [now()->subDays(90), 'day'],
-            default => [now()->subDays(30), 'day'],
-        };
+        $period = $this->umamiPeriod();
+        $unit = $period->chartUnit();
 
         try {
-            $series = $this->umami()->pageviewSeries($websiteId, $start, now(), $unit);
+            $series = $this->umami()->pageviewSeries($websiteId, $period->start(), now(), $unit);
         } catch (Throwable $exception) {
             report($exception);
 
             return ['datasets' => [], 'labels' => []];
         }
 
+        // Resolved once: formatLabel() runs per point, up to 90 of them.
+        $timezone = config('app.timezone', 'UTC');
         $sessionSeries = collect($series['sessions'])->keyBy('x');
         $labels = [];
         $pageviews = [];
@@ -75,7 +80,7 @@ class UmamiVisitorsChartWidget extends ChartWidget
 
         foreach ($series['pageviews'] as $point) {
             $x = (string) ($point['x'] ?? '');
-            $labels[] = $this->formatLabel($x, $unit);
+            $labels[] = $this->formatLabel($x, $unit, $timezone);
             $pageviews[] = (int) ($point['y'] ?? 0);
             $sessions[] = (int) ($sessionSeries[$x]['y'] ?? 0);
         }
@@ -108,10 +113,10 @@ class UmamiVisitorsChartWidget extends ChartWidget
         ];
     }
 
-    protected function formatLabel(string $timestamp, string $unit): string
+    protected function formatLabel(string $timestamp, string $unit, string $timezone): string
     {
         try {
-            $date = Carbon::parse($timestamp)->timezone(config('app.timezone', 'UTC'));
+            $date = Carbon::parse($timestamp)->timezone($timezone);
         } catch (Throwable) {
             return $timestamp;
         }

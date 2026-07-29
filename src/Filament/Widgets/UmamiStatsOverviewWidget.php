@@ -2,10 +2,13 @@
 
 namespace Mmoollllee\Filami\Filament\Widgets;
 
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\View;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Number;
 use Mmoollllee\Filami\Filament\Widgets\Concerns\InteractsWithUmami;
+use Mmoollllee\Filami\Support\UmamiPeriod;
 use Mmoollllee\Filami\Support\UmamiStats;
 use Throwable;
 
@@ -13,6 +16,12 @@ use Throwable;
  * Key metrics for the current tenant's website: live visitors plus the
  * reporting window (visitors, pageviews, visit time, bounce rate) compared
  * against the previous window. Hides itself without credentials or website.
+ *
+ * This widget owns the reporting-window select for the whole analytics section
+ * — one control rather than three, with the chart and the top-pages table
+ * following along ({@see InteractsWithUmami}). It therefore has to be on the
+ * dashboard for the window to be changeable; the other two read the shared
+ * state but do not render a control of their own.
  */
 class UmamiStatsOverviewWidget extends StatsOverviewWidget
 {
@@ -25,9 +34,31 @@ class UmamiStatsOverviewWidget extends StatsOverviewWidget
     /** Matches cache.active_ttl, the shortest-lived value on display. */
     protected ?string $pollingInterval = '60s';
 
+    /**
+     * All five stats on one row. The inherited heuristic would put four up top
+     * and leave the fifth alone on a second row, which costs the dashboard a
+     * whole band of vertical space for one number.
+     */
+    protected function getColumns(): int|array|null
+    {
+        return ['@md' => 3, '@xl' => 5, '!@lg' => 5];
+    }
+
     public function getHeading(): ?string
     {
-        return __('filami::widgets.stats_heading', ['days' => $this->periodDays()]);
+        // No day count here any more: the select right next to it says which
+        // window is on display, and repeating it only invites the two to drift.
+        return __('filami::widgets.stats_heading');
+    }
+
+    /** Hangs the window select off the section header, next to the heading. */
+    public function getSectionContentComponent(): Component
+    {
+        return parent::getSectionContentComponent()
+            ->afterHeader(
+                View::make('filami::widgets.period-filter')
+                    ->viewData(['periodOptions' => UmamiPeriod::options()]),
+            );
     }
 
     protected function getStats(): array
@@ -39,10 +70,10 @@ class UmamiStatsOverviewWidget extends StatsOverviewWidget
         }
 
         $client = $this->umami();
-        $days = $this->periodDays();
+        $period = $this->umamiPeriod();
         $end = now();
-        $start = $end->copy()->subDays($days);
-        $previousStart = $end->copy()->subDays($days * 2);
+        $start = $period->start($end);
+        $previousStart = $period->previousStart($end);
 
         try {
             $current = $client->stats($websiteId, $start, $end);

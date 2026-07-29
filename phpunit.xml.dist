@@ -11,6 +11,9 @@
         </testsuite>
     </testsuites>
     <php>
+        <!-- Rendering the widgets goes through Livewire, which signs its
+             snapshots — a fixed dummy key keeps that off every test's setup. -->
+        <env name="APP_KEY" value="base64:ZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmY="/>
         <env name="DB_CONNECTION" value="testing"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

@@ -49,4 +49,9 @@ trait HasUmamiWebsite
     {
         return Filami::conventionalUrl($this);
     }
+
+    public function umamiRecorderEnabled(): bool
+    {
+        return Filami::conventionalRecorder($this);
+    }
 }

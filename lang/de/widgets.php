@@ -1,9 +1,11 @@
 <?php
 
 return [
-    'stats_heading' => 'Umami · Letzte :days Tage',
+    // No day count: the select next to the heading names the window.
+    'stats_heading' => 'Umami',
+    'period_label' => 'Zeitraum',
     'active_now' => 'Jetzt aktiv',
-    'active_now_description' => 'in den letzten 5 Minuten',
+    'active_now_description' => 'letzte 5 Minuten',
     'visitors' => 'Besucher',
     'sessions' => 'Sitzungen',
     'pageviews' => 'Seitenaufrufe',
@@ -19,8 +21,16 @@ return [
         '90d' => 'Letzte 90 Tage',
     ],
     'top_pages' => 'Meistbesuchte Seiten',
-    'period_days' => 'Letzte :days Tage',
+    'page_path' => 'Seite',
     'open_in_umami' => 'Details in Umami',
     'no_data' => 'Noch keine Daten erfasst.',
     'unreachable' => 'Umami ist gerade nicht erreichbar.',
+    'events' => 'Ereignisse',
+    'event_name' => 'Ereignis',
+    'event_count' => 'Anzahl',
+    'breakdown' => 'Aufschlüsseln',
+    'close' => 'Schließen',
+    'no_events' => 'Noch keine Ereignisse erfasst.',
+    'no_events_hint' => 'Klicks auf Telefon-/E-Mail-Links und abgeschickte Formulare erscheinen hier, sobald sie auftreten.',
+    'no_event_properties' => 'Zu diesem Ereignis wurden keine Zusatzdaten erfasst.',
 ];

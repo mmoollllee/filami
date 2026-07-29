@@ -34,4 +34,9 @@ class TrackedSite extends Model implements UmamiTrackable
     {
         return $this->endpoint;
     }
+
+    public function umamiRecorderEnabled(): bool
+    {
+        return (bool) $this->records;
+    }
 }

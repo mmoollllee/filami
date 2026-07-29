@@ -10,13 +10,45 @@ class FilamiServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/filami.php', 'filami');
+        // Recursive, unlike mergeConfigFrom(): that one array_merges only the
+        // top level, so an app whose published config predates a nested key
+        // (tracking.consent, say) would silently lose every default under
+        // `tracking` — and a missing consent category means "not gated".
+        // Skipped once the app is config:cached — the cache already holds the
+        // merged array, and re-requiring the file per request would both undo
+        // that saving and re-evaluate env() with no .env loaded.
+        if (! $this->app->configurationIsCached()) {
+            $this->app['config']->set('filami', $this->mergeRecursive(
+                require __DIR__.'/../config/filami.php',
+                (array) $this->app['config']->get('filami', []),
+            ));
+        }
 
-        // bind(), not singleton(): the client is a thin config carrier, and a
-        // shared instance would freeze credentials and TTLs at first resolution
-        // — stale for the rest of an Octane worker's life, and out of step with
-        // Filami::apiConfigured(), which keeps reading config live.
-        $this->app->bind(UmamiClient::class, fn ($app) => UmamiClient::fromConfig($app['config']->get('filami', [])));
+        // scoped(), not singleton(): one instance per REQUEST, which Octane
+        // flushes between requests — so credentials and TTLs never freeze for a
+        // worker's lifetime, the staleness singleton() would cause. bind() was
+        // the previous compromise, but a dashboard render resolves this several
+        // times and each resolution re-read the whole config array.
+        $this->app->scoped(UmamiClient::class, fn ($app) => UmamiClient::fromConfig($app['config']->get('filami', [])));
+    }
+
+    /**
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    protected function mergeRecursive(array $defaults, array $overrides): array
+    {
+        foreach ($overrides as $key => $value) {
+            $defaults[$key] = is_array($value) && is_array($defaults[$key] ?? null)
+                // List values (e.g. tracking.environments) replace wholesale;
+                // merging them would make a default impossible to remove.
+                && ! array_is_list($value)
+                ? $this->mergeRecursive($defaults[$key], $value)
+                : $value;
+        }
+
+        return $defaults;
     }
 
     public function boot(): void

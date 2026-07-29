@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Mmoollllee\Filami\Filament\Widgets\UmamiStatsOverviewWidget;
 use Mmoollllee\Filami\Filament\Widgets\UmamiTopPagesWidget;
 use Mmoollllee\Filami\Filament\Widgets\UmamiVisitorsChartWidget;
+use Mmoollllee\Filami\Support\UmamiPeriod;
 
 it('hides all widgets while unconfigured', function () {
     expect(UmamiStatsOverviewWidget::canView())->toBeFalse()
@@ -26,7 +27,7 @@ it('degrades to a placeholder when umami is unreachable', function () {
     ]);
 
     $widget = new UmamiStatsOverviewWidget;
-    $stats = (new ReflectionMethod($widget, 'getStats'))->invoke($widget);
+    $stats = widgetCall($widget, 'getStats');
 
     expect($stats)->toHaveCount(1)
         ->and((string) $stats[0]->getValue())->toBe('—');
@@ -56,7 +57,7 @@ it('builds the stats overview from the api', function () {
     ]);
 
     $widget = new UmamiStatsOverviewWidget;
-    $stats = (new ReflectionMethod($widget, 'getStats'))->invoke($widget);
+    $stats = widgetCall($widget, 'getStats');
 
     expect($stats)->toHaveCount(5)
         ->and((string) $stats[0]->getValue())->toBe('3')     // active now
@@ -78,7 +79,7 @@ it('builds the chart datasets from the pageview series', function () {
     ]);
 
     $widget = new UmamiVisitorsChartWidget;
-    $data = (new ReflectionMethod($widget, 'getData'))->invoke($widget);
+    $data = widgetCall($widget, 'getData');
 
     expect($data['labels'])->toHaveCount(2)
         ->and($data['datasets'][0]['data'])->toBe([4, 6])
@@ -88,20 +89,80 @@ it('builds the chart datasets from the pageview series', function () {
 it('lists top pages with a link into umami', function () {
     configureUmami(['website_id' => 'w-1']);
 
-    Http::fake([
-        '*/api/auth/login' => Http::response(['token' => 't']),
-        '*/api/websites/w-1/metrics*' => Http::response([
-            ['x' => '/', 'y' => 120],
-            ['x' => '/kontakt', 'y' => 30],
-        ]),
+    fakeUmamiMetrics([
+        ['x' => '/', 'y' => 120],
+        ['x' => '/kontakt', 'y' => 30],
     ]);
 
     $widget = new UmamiTopPagesWidget;
-    $data = (new ReflectionMethod($widget, 'getViewData'))->invoke($widget);
+    $pages = widgetCall($widget, 'rows');
+    $url = widgetCall($widget, 'umamiDashboardUrl', 'w-1');
 
-    expect($data['pages'])->toHaveCount(2)
-        ->and($data['max'])->toBe(120)
-        ->and($data['umamiUrl'])->toBe('https://a.example.test/websites/w-1');
+    expect($pages)->toHaveCount(2)
+        ->and($pages[0])->toBe(['path' => '/', 'views' => 120, 'share' => 100.0])
+        // Share is relative to the busiest path, not to the total.
+        ->and($pages[1])->toBe(['path' => '/kontakt', 'views' => 30, 'share' => 25.0])
+        ->and($url)->toBe('https://a.example.test/websites/w-1');
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'type=path'));
+});
+
+it('pages through the top pages without asking umami again', function () {
+    configureUmami(['website_id' => 'w-1']);
+
+    fakeUmamiMetrics([
+        ['x' => '/', 'y' => 120],
+        ['x' => '/kontakt', 'y' => 30],
+        ['x' => '/mietpark', 'y' => 10],
+    ]);
+
+    $widget = new UmamiTopPagesWidget;
+
+    $first = widgetCall($widget, 'paginateRows', 1, 2);
+    $second = widgetCall($widget, 'paginateRows', 2, 2);
+
+    expect($first->total())->toBe(3)
+        ->and($first->items())->toHaveCount(2)
+        ->and($second->items())->toHaveCount(1)
+        ->and(array_values($second->items())[0]['path'])->toBe('/mietpark')
+        // Record keys must stay unique across pages, or Livewire reuses row state.
+        ->and(array_keys($second->items()))->toBe([2]);
+
+    // /metrics takes no offset: one response is fetched and paged in PHP.
+    Http::assertSentCount(2); // login + metrics
+});
+
+it('asks umami for the shared reporting window', function () {
+    configureUmami(['website_id' => 'w-1']);
+
+    Http::fake([
+        '*/api/auth/login' => Http::response(['token' => 't']),
+        '*/api/websites/w-1/pageviews*' => Http::response(['pageviews' => [], 'sessions' => []]),
+    ]);
+
+    $widget = new UmamiVisitorsChartWidget;
+    $widget->umamiPeriod = '24h';
+
+    widgetCall($widget, 'getData');
+
+    // A single day is charted hourly; anything longer would be a flat line.
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'pageviews')
+        && str_contains($request->url(), 'unit=hour'));
+});
+
+it('falls back to the default window for an unknown period', function () {
+    // The period is a public Livewire property, so the browser can send
+    // anything; it must never reach the API as-is.
+    $widget = new UmamiVisitorsChartWidget;
+    $widget->umamiPeriod = "'; drop table";
+
+    expect(widgetCall($widget, 'umamiPeriod')->value)->toBe('7d');
+});
+
+it('honours a legacy stats_period_days config', function () {
+    config()->set('filami.widgets.stats_period_days', 14);
+
+    // Widened to the nearest window that covers 14 days, rather than silently
+    // narrowing the dashboard to 7.
+    expect(UmamiPeriod::default()->value)->toBe('30d');
 });
