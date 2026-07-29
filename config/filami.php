@@ -104,7 +104,11 @@ return [
         // click between your own domains does not count as leaving. The current
         // host is always internal and need not be listed.
         //
-        //     UMAMI_INTERNAL_DOMAINS=muench-tiefbau.de,jobs.muench-tiefbau.de
+        //     UMAMI_INTERNAL_DOMAINS=example.com,shop.example.com
+        //
+        // Empty is a legitimate answer: a second domain of yours is often its
+        // own destination (a jobs or shop site), and a visitor moving there is
+        // a result worth counting rather than internal navigation to hide.
         //
         // Exact hostnames, not suffixes: "example.com" does NOT cover
         // "shop.example.com". Matching by registrable domain would need the

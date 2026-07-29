@@ -278,11 +278,15 @@ the "open in Umami" link.
    `outbound-click` with the target host, so the dashboard answers "where do we
    send people" in one row per destination rather than one per link. Relative
    hrefs, `#anchor` and `javascript:` fall out on their own (the check reads the
-   anchor's *resolved* protocol and hostname). A site spread over several of its
-   own domains lists the others so a hop between them does not count as leaving:
+   anchor's *resolved* protocol and hostname).
+
+   A site spread over several of its own domains can declare the others, so a
+   hop between them is not counted as leaving. Whether it should be is a
+   judgement call, not a rule: a jobs or shop domain is often its own
+   destination, and moving there is a result worth measuring.
 
    ```dotenv
-   UMAMI_INTERNAL_DOMAINS=muench-tiefbau.de,jobs.muench-tiefbau.de
+   UMAMI_INTERNAL_DOMAINS=example.com,shop.example.com
    ```
 
    Exact hostnames, not suffixes — matching by registrable domain would need the
