@@ -28,7 +28,33 @@
         }
     };
 
+    /**
+     * Names the visitor for the rest of the visit: a distinct id of the app's
+     * choosing (a pseudonym, never an address) and/or session data. Same
+     * guard as track(): without the tracker it does nothing, and says so.
+     */
+    var identify = function (distinctId, sessionData) {
+        if (! window.umami || typeof window.umami.identify !== 'function') {
+            return false;
+        }
+
+        var data = (sessionData && ! Array.isArray(sessionData)) ? sessionData : {};
+
+        try {
+            if (distinctId) {
+                window.umami.identify(String(distinctId), data);
+            } else {
+                window.umami.identify(data);
+            }
+        } catch (error) {
+            // Analytics must never break the page it measures.
+        }
+
+        return true;
+    };
+
     window.filami = { track: track };
+    window.filami.identify = identify;
 
     // Bridge for Livewire ($this->dispatch('filami-track', name: …, data: […]))
     // and plain JS. Keeps the app side free of any Umami API.

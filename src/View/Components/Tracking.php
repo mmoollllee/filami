@@ -39,9 +39,7 @@ class Tracking extends Component
 
     public function shouldRender(): bool
     {
-        return filled($this->websiteId)
-            ? Filami::enabled($this->for) && Filami::environmentAllowed()
-            : Filami::tracks($this->for);
+        return Filami::tracks($this->for, $this->websiteId);
     }
 
     public function render(): View

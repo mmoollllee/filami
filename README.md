@@ -262,6 +262,9 @@ the "open in Umami" link.
 ```blade
 <x-filami::tracking :for="$tenant" />
 <x-filami::events :for="$tenant" />
+{{-- a site tracked by a fixed id passes the same id to both: --}}
+<x-filami::tracking website-id="94db1cb1-…" />
+<x-filami::events website-id="94db1cb1-…" />
 ```
 
 1. **Phone and mail clicks** — a delegated listener reports every `tel:` and
@@ -305,12 +308,48 @@ the "open in Umami" link.
 
    Exact hostnames, not suffixes — matching by registrable domain would need the
    public suffix list to avoid treating `co.uk` as one site.
-4. **`window.filami.track(name, data)`** for plain JS and Alpine.
+4. **`window.filami.track(name, data)`** for plain JS and Alpine, and
+   `window.filami.identify(distinctId, sessionData)` for a page that learns
+   who is there after loading (see below).
 
-All three are no-ops while `window.umami` is absent — which is what makes them
+All of them are no-ops while `window.umami` is absent — which is what makes them
 correct behind a consent gate: no tracker, no events, and no second gate to
 keep in sync. Never put personal data in an event; the payload is stored
 alongside the pageview.
+
+## Identifying visitors
+
+Umami can name a visitor: a **distinct id** keeps their sessions together
+across devices, and **session data** adds properties the dashboard breaks
+sessions down by. `<x-filami::identify />` goes after the tracker, with the
+same `:for` or `website-id`:
+
+```blade
+<x-filami::identify
+    :for="$tenant"
+    :distinct-id="$user ? 'user-'.$user->id : null"
+    :session-data="['customer' => $user?->company->name, 'plan' => $user?->plan]"
+/>
+```
+
+- It renders under the tracker's conditions, and not at all without an id or
+  data — pass `null` for a guest and the layout needs no `@auth`.
+- Session data is kept flat: named scalar values only, the rest is dropped.
+- **Timing.** The tracker loads deferred, so the call waits for
+  `DOMContentLoaded`. An ungated tracker is always there by then and has not
+  sent its first pageview yet (it sends it once the document is complete), so
+  that pageview carries the id. A tracker behind a consent gate may arrive
+  later; the call looks for it for ten seconds, and what was sent before goes
+  without the id.
+- Every page load sends one identify request next to the pageview.
+- For an SPA that signs someone in without reloading, call
+  `window.filami.identify(distinctId, sessionData)` from
+  `<x-filami::events />` once it knows.
+
+Whatever you pass is stored beside every pageview of the session and readable
+in the dashboard. Use a pseudonym for the id (`user-42`, not an e-mail
+address), keep names and addresses of people out, and say in the privacy
+policy that visits are attributed.
 
 ## Config reference
 

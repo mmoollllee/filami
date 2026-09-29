@@ -177,3 +177,24 @@ it('renames the outbound event from config', function () {
 
     expect(Blade::render('<x-filami::events />'))->toContain('"externer-link"');
 });
+
+it('renders for an explicit website id like the tracker does', function () {
+    // A page tracked by website-id alone has no configured or model id to
+    // fall back on; without the attribute its events had nowhere to go.
+    config()->set('filami.website_id', null);
+
+    expect(Blade::render('<x-filami::events website-id="w-explicit" />'))->toContain('window.filami = { track: track };');
+});
+
+it('keeps an explicit website id out of the environments the tracker skips', function () {
+    config()->set('filami.website_id', null);
+    config()->set('filami.tracking.environments', ['production']);
+
+    expect(trim(Blade::render('<x-filami::events website-id="w-explicit" />')))->toBe('');
+});
+
+it('hands the bridge an identify that tolerates an absent tracker', function () {
+    expect(Blade::render('<x-filami::events />'))
+        ->toContain('window.filami.identify = identify;')
+        ->toContain("typeof window.umami.identify !== 'function'");
+});

@@ -340,12 +340,18 @@ class Filami
             : static::conventionalRecorder($model);
     }
 
-    /** Whether the tracking snippet renders right now — for privacy pages etc. */
-    public static function tracks(mixed $model = null): bool
+    /**
+     * Whether the tracking snippet renders right now — for privacy pages etc.
+     *
+     * An explicit website id (the components' `website-id` attribute) stands
+     * in for the one resolved from $model; the switch, the endpoint and the
+     * environment still decide.
+     */
+    public static function tracks(mixed $model = null, ?string $websiteId = null): bool
     {
         return static::enabled($model)
             && static::environmentAllowed()
-            && filled(static::websiteIdFor($model));
+            && (filled($websiteId) || filled(static::websiteIdFor($model)));
     }
 
     /** Whether filami.tracking.environments covers the current environment. */

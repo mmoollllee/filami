@@ -12,10 +12,15 @@ use Mmoollllee\Filami\Filami;
  * without knowing about Umami), and optional click tracking for tel:/mailto:
  * links.
  *
- * Drop it after <x-filami::tracking />. It renders under exactly the same
- * conditions, and everything it installs degrades to a no-op while
- * `window.umami` is absent — which is also what makes it correct behind a
- * consent gate: no tracker, no events, without a second gate to keep in sync.
+ * Drop it after <x-filami::tracking />, with the same :for or website-id. It
+ * renders under exactly the same conditions, and everything it installs
+ * degrades to a no-op while `window.umami` is absent — which is also what
+ * makes it correct behind a consent gate: no tracker, no events, without a
+ * second gate to keep in sync.
+ *
+ * The bridge also carries `window.filami.identify(distinctId, sessionData)`,
+ * for pages that learn who is there after loading (an SPA sign-in); the
+ * page-load case is <x-filami::identify />.
  *
  * Umami's own `data-umami-event` attribute still works and takes precedence;
  * the link tracking here exists for the markup you do not control, i.e. phone
@@ -30,11 +35,15 @@ class Events extends Component
         protected mixed $links = null,
         protected mixed $forms = null,
         protected mixed $outbound = null,
+        // As on <x-filami::tracking />: a page tracked by an explicit id would
+        // otherwise lose its events to a tracker nobody configured. Last, so
+        // positional callers of the constructor keep their meaning.
+        protected ?string $websiteId = null,
     ) {}
 
     public function shouldRender(): bool
     {
-        return Filami::tracks($this->for);
+        return Filami::tracks($this->for, $this->websiteId);
     }
 
     public function render(): View
